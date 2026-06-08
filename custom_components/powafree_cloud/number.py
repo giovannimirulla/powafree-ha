@@ -39,7 +39,12 @@ class PowafreeNumber(CoordinatorEntity, NumberEntity):
         if not self.coordinator.data:
             return None
         
-        raw_data = self.coordinator.data.get("data", {})
+        raw_data = self.coordinator.data
+        if isinstance(raw_data, dict) and "data" in raw_data and isinstance(raw_data["data"], dict):
+            raw_data = raw_data["data"]
+        elif not isinstance(raw_data, dict):
+            raw_data = {}
+            
         val = raw_data.get(self._data_key)
         
         if val is not None:
