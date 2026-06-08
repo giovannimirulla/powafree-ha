@@ -105,14 +105,35 @@ class PowafreeApiClient:
     async def set_config(self, ble_mac: str, key: str, value: Any) -> bool:
         """
         Send a command to the device using the correct YtDeviceConfig schema.
+        L'API richiede l'oggetto di configurazione COMPLETO, quindi prima scarichiamo,
+        poi modifichiamo il parametro, e infine ricarichiamo tutto.
         """
         from .const import API_DEVICE_SET
         target_mac = ble_mac or self._ble_mac
-        data = {
+        base_req = {
             "userId": self._user_id,
-            "bleMac": target_mac,
-            key: value
+            "bleMac": target_mac
         }
         
-        response = await self._request(API_DEVICE_SET, data=data)
+        # 1. Scarica la configurazione attuale
+        try:
+            current_config = await self._request("/api/devices/setting/download", data=base_req)
+        except Exception as e:
+            _LOGGER.error("Errore nel download della configurazione: %s", e)
+            return False
+            
+        if not isinstance(current_config, dict):
+            _LOGGER.error("Formato configurazione inatteso: %s", current_config)
+            return False
+
+        # 2. Modifica il parametro richiesto
+        current_config[key] = value
+        
+        # Il payload per l'upload è l'intera configurazione modificata, a cui 
+        # assicuriamo siano presenti userId e bleMac
+        current_config["userId"] = self._user_id
+        current_config["bleMac"] = target_mac
+        
+        # 3. Invia la configurazione completa
+        response = await self._request(API_DEVICE_SET, data=current_config)
         return True
