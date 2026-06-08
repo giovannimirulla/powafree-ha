@@ -104,17 +104,15 @@ class PowafreeApiClient:
         
     async def set_config(self, ble_mac: str, key: str, value: Any) -> bool:
         """
-        Send a command to the device.
-        Endpoint e struttura da definire esattamente in base al reverse engineering
-        delle API post cattura o tentativi futuri.
+        Send a command to the device using the correct YtDeviceConfig schema.
         """
+        from .const import API_DEVICE_SET
         target_mac = ble_mac or self._ble_mac
         data = {
             "userId": self._user_id,
             "bleMac": target_mac,
-            "config": {key: value} # Struttura ipotetica, da raffinare
+            key: value
         }
         
-        # In assenza del path esatto, simuliamo un log per ora finché non sniffiamo l'app
-        _LOGGER.warning("Comando SET non ancora implementato a livello API reale. Tentativo invio: %s=%s", key, value)
-        return True # Simuliamo successo
+        response = await self._request(API_DEVICE_SET, data=data)
+        return True

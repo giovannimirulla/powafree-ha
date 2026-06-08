@@ -18,4 +18,4 @@ API_DEVICE_LAST_DATA = "/api/devices/last_data"
 API_DEVICE_DATA = "/api/devices/data"
 
 # Comandi dedotti (setter)
-API_DEVICE_SET = "/api/devices/set_config" # Questo sarà da verificare empiricamente, solitamente è config_set o set_config. Se non c'è, adatteremo.
+API_DEVICE_SET = "/api/devices/setting/upload"
