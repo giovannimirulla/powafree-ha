@@ -1,0 +1,12 @@
+{
+  "domain": "powafree_cloud",
+  "name": "Powafree H4 Cloud Integration",
+  "codeowners": ["@powafree_user"],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/placeholder",
+  "integration_type": "hub",
+  "iot_class": "cloud_polling",
+  "requirements": [],
+  "version": "1.0.0"
+}

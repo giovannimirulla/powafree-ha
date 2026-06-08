@@ -1,0 +1,8 @@
+{
+  "name": "Powafree H4 Cloud",
+  "render_readme": true,
+  "file_name": "powafree_cloud",
+  "iot_class": "Cloud Polling",
+  "domain": "powafree_cloud",
+  "version": "1.0.0"
+}
