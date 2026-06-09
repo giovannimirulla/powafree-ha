@@ -8,43 +8,48 @@ from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities):
     """Set up Powafree switches."""
     coordinator = hass.data[DOMAIN][entry.entry_id]
-    
-    # Dalla stringa DEX: "setGridEnable", "setBmsEnable"
+
     switches = [
-        PowafreeSwitch(coordinator, "gridEnable", "Immissione in Rete"),
-        PowafreeSwitch(coordinator, "bmsEnable", "Abilitazione BMS")
+        PowafreeSwitch(coordinator, "gridEnable", "Immissione in Rete",
+                       "mdi:transmission-tower"),
+        PowafreeSwitch(coordinator, "bmsEnable", "Abilitazione BMS",
+                       "mdi:battery-check"),
+        PowafreeSwitch(coordinator, "ctEnable", "Sensore CT / Meter",
+                       "mdi:meter-electric"),
+        PowafreeSwitch(coordinator, "pfSwitch", "Power Factor Compensation",
+                       "mdi:sine-wave"),
+        PowafreeSwitch(coordinator, "deviceControl", "Controllo Dispositivo",
+                       "mdi:power"),
+        PowafreeSwitch(coordinator, "gridControl", "Controllo Rete",
+                       "mdi:electric-switch"),
     ]
-    
+
     async_add_entities(switches)
 
-class PowafreeSwitch(CoordinatorEntity, SwitchEntity):
-    """Representation of a Powafree Switch."""
 
-    def __init__(self, coordinator, data_key, name):
+class PowafreeSwitch(CoordinatorEntity, SwitchEntity):
+    """Representation of a Powafree Switch (config setting)."""
+
+    def __init__(self, coordinator, data_key, name, icon=None):
         """Initialize the switch."""
         super().__init__(coordinator)
         self._data_key = data_key
         self._attr_name = f"Powafree H4 {name}"
         self._attr_unique_id = f"{coordinator.client._ble_mac}_switch_{data_key}"
+        if icon:
+            self._attr_icon = icon
 
     @property
     def is_on(self) -> bool:
         """Return true if switch is on."""
-        if not self.coordinator.data:
+        config = self.coordinator.config_data
+        if not config or not isinstance(config, dict):
             return False
-        
-        raw_data = self.coordinator.data
-        if isinstance(raw_data, dict) and "data" in raw_data and isinstance(raw_data["data"], dict):
-            raw_data = raw_data["data"]
-        elif not isinstance(raw_data, dict):
-            raw_data = {}
-            
-        val = raw_data.get(self._data_key)
-        
-        # Ipotizziamo che 1 o "1" o True sia acceso
+        val = config.get(self._data_key)
         return val in (1, "1", True, "true", "True")
 
     async def async_turn_on(self, **kwargs):
@@ -70,5 +75,6 @@ class PowafreeSwitch(CoordinatorEntity, SwitchEntity):
         return {
             "identifiers": {(DOMAIN, mac)},
             "name": "Powafree H4",
-            "manufacturer": "BigBlue"
+            "manufacturer": "BigBlue",
+            "model": "POWAFREE H4",
         }
