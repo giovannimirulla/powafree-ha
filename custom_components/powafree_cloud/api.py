@@ -176,3 +176,93 @@ class PowafreeApiClient:
         # 3. Invia la configurazione completa
         response = await self._request(API_DEVICE_SET, data=current_config)
         return True
+
+    @staticmethod
+    def make_period(start: str, end: str, watts: int) -> str:
+        """Crea una stringa periodo nel formato API Powafree.
+        
+        La potenza viene salvata ×10 rispetto al valore in W.
+        Es.: 300W → "|06:00-09:00|3000|"
+        """
+        return f"|{start}-{end}|{watts * 10}|"
+
+    async def set_customize_mode(
+        self,
+        ble_mac: str = None,
+        period_detail: list = None,
+    ) -> bool:
+        """Imposta la Modalità 3 (Customize Mode) con fasce orarie settimanali.
+
+        Args:
+            ble_mac:       MAC del dispositivo (usa self._ble_mac se None)
+            period_detail: lista di 7 liste di stringhe periodo (use make_period()).
+                           Indici: 0=Dom, 1=Lun, 2=Mar, 3=Mer, 4=Gio, 5=Ven, 6=Sab.
+                           Deve coprire 00:00→23:59 senza buchi, max 12 periodi/giorno.
+                           Se None usa il profilo di default ottimizzato.
+
+        Returns:
+            True se l'upload è andato a buon fine.
+        """
+        target_mac = ble_mac or self._ble_mac
+        if not target_mac:
+            await self.get_devices()
+            target_mac = self._ble_mac
+
+        base_req = {"userId": self._user_id, "bleMac": target_mac}
+
+        # Scarica config attuale per non sovrascrivere altri campi
+        try:
+            config = await self._request("/api/devices/setting/download", data=base_req)
+        except Exception as e:
+            _LOGGER.error("Errore download config per Mod.3: %s", e)
+            return False
+
+        if not isinstance(config, dict):
+            _LOGGER.error("Config non valida per Mod.3: %s", config)
+            return False
+
+        # Usa il profilo di default se non specificato
+        if period_detail is None:
+            period_detail = self._default_period_detail()
+
+        config["mode"] = 3
+        config["periodDetail"] = period_detail
+        config["userId"] = self._user_id
+        config["bleMac"] = target_mac
+
+        try:
+            await self._request("/api/devices/setting/upload", data=config)
+            _LOGGER.info("Modalità 3 (Customize) impostata con successo")
+            return True
+        except Exception as e:
+            _LOGGER.error("Errore upload Mod.3: %s", e)
+            return False
+
+    def _default_period_detail(self) -> list:
+        """Profilo di default ottimizzato per uso domestico italiano.
+
+        Strategia:
+        - Notte (00:00-06:30): 350W — copre carichi standby + frigorifero
+        - Mattina presto (06:30-09:00): 0W — solare inizia, lascia caricare la batteria
+        - Giorno (09:00-20:00): 0W — gestito da Mod.1/Mod.2 tramite automazione HA
+        - Sera (20:00-23:00): 400W — consumi serali alti (TV, luci, climatizzatori)
+        - Tarda sera (23:00-23:59): 250W — ramp-down verso la notte
+        """
+        p = self.make_period
+        giorno_base = [
+            p("00:00", "06:30", 350),
+            p("06:30", "09:00", 0),
+            p("09:00", "20:00", 0),
+            p("20:00", "23:00", 400),
+            p("23:00", "23:59", 250),
+        ]
+        # Stessa configurazione tutti i giorni (personalizzabile)
+        return [giorno_base[:] for _ in range(7)]
+
+    async def set_mode(self, mode: int, ble_mac: str = None) -> bool:
+        """Imposta la modalità operativa (1=Battery, 2=Peak, 3=Customize).
+        
+        Per Mod.3 usa set_customize_mode() per configurare anche i periodi.
+        Questo metodo imposta solo il numero di modalità senza toccare i periodi.
+        """
+        return await self.set_config(ble_mac or self._ble_mac, "mode", mode)

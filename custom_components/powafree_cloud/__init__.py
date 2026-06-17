@@ -1,9 +1,11 @@
 import asyncio
 import logging
 
+import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+import homeassistant.helpers.config_validation as cv
 
 from .api import PowafreeApiClient
 from .const import DOMAIN, CONF_EMAIL, CONF_PASSWORD
@@ -12,6 +14,13 @@ from .coordinator import PowafreeDataUpdateCoordinator
 _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS = ["sensor", "switch", "number"]
+
+# Schema per il servizio set_customize_mode
+SERVICE_SET_CUSTOMIZE_MODE = "set_customize_mode"
+SERVICE_SCHEMA_CUSTOMIZE = vol.Schema({
+    vol.Optional("periods"): list,  # lista di 7 liste (opzionale, usa default se assente)
+})
+
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Powafree from a config entry."""
@@ -38,6 +47,29 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data[DOMAIN][entry.entry_id] = coordinator
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    # ── Registra i servizi custom ──────────────────────────────────────────────
+
+    async def handle_set_customize_mode(call: ServiceCall) -> None:
+        """Imposta Mod.3 (Customize) con fasce orarie settimanali."""
+        periods = call.data.get("periods")  # None = usa il profilo di default
+        for coordinator in hass.data[DOMAIN].values():
+            try:
+                ok = await coordinator.client.set_customize_mode(period_detail=periods)
+                if ok:
+                    await coordinator.async_request_refresh()
+                    _LOGGER.info("Modalità 3 (Customize) impostata tramite servizio HA")
+                else:
+                    _LOGGER.error("Impossibile impostare Modalità 3")
+            except Exception as ex:
+                _LOGGER.error("Errore set_customize_mode: %s", ex)
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SET_CUSTOMIZE_MODE,
+        handle_set_customize_mode,
+        schema=SERVICE_SCHEMA_CUSTOMIZE,
+    )
 
     return True
 
